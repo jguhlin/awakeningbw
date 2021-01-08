@@ -4,6 +4,7 @@
 use bevy::prelude::*;
 use bevy::render::camera::Camera;
 use bevy::render::pass::ClearColor;
+use bevy_prototype_lyon::prelude::*;
 use bevy_rapier2d::physics::RapierConfiguration;
 use bevy_rapier2d::physics::RapierPhysicsPlugin;
 use bevy_rapier2d::render::RapierRenderPlugin;
@@ -11,13 +12,14 @@ use rand::distributions::{Distribution, Uniform};
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use std::str::FromStr;
-use bevy_prototype_lyon::prelude::*;
 
 mod editor;
 mod furniture;
+mod player;
 
 use editor::*;
 use furniture::*;
+use player::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum AppState {
@@ -36,8 +38,7 @@ pub struct StageEntities {
     entities: Vec<Entity>,
 }
 
-pub struct Player {
-}
+pub struct Player {}
 
 #[bevy_main]
 fn main() {
@@ -46,6 +47,7 @@ fn main() {
         .add_resource(State::new(AppState::PlayerTurn))
         .add_resource(Player {})
         .add_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
+        .add_resource(FurnitureAssets::default())
         .add_resource(WindowDescriptor {
             title: "Awakening BW".to_string(),
             width: 640.,
@@ -64,6 +66,7 @@ fn main() {
     // app.add_system(bevy::input::system::exit_on_esc_system.system())
     // Universal systems
     app.add_startup_system(setup.system())
+        .add_startup_system(spawn_furniture_assets.system())
         // Game resources
         // .add_resource(State::new(AppState::Overworld))
         // Generic plug-ins
@@ -81,6 +84,7 @@ fn main() {
         .add_resource(GreetTimer(Timer::from_seconds(15.0, true)))
         .add_system(debug.system())
         .add_plugin(EditorPlugin)
+        .add_plugin(PlayerPlugin)
         // .add_plugin(RapierRenderPlugin)
         // .add_plugin(DebugPickingPlugin)
         .run();
@@ -88,20 +92,24 @@ fn main() {
 
 pub fn spawn_furniture(
     commands: &mut Commands,
-    mut materials: &mut ResMut<Assets<ColorMaterial>>,
-    mut meshes: &mut ResMut<Assets<Mesh>>,
-    mut asset_server: &mut Res<AssetServer>,
+    furniture_assets: Res<FurnitureAssets>,
+    placed_furniture: &PlacedFurniture,
     x: f32,
     y: f32,
 ) {
-    let texture_handle = asset_server.load("couch.png");
+    let asset = furniture_assets
+        .assets
+        .get(&placed_furniture.item)
+        .unwrap()
+        .clone();
 
     commands.spawn(SpriteBundle {
-        material: materials.add(texture_handle.into()),
+        material: asset,
         transform: {
-            let mut x = Transform::from_translation(Vec3::new(x, y, 1.0));
-            x.rotate(Quat::from_rotation_z(std::f32::consts::PI / 2.0));
-            x },
+            let mut x = Transform::from_translation(Vec3::new(x, y, 0.0));
+            x.rotate(placed_furniture.rot);
+            x
+        },
         ..Default::default()
     });
 }
@@ -123,14 +131,15 @@ fn setup(
             ))
             .looking_at(Vec3::new(0.0, 0.2, 0.0), Vec3::unit_y()), */
             ..Default::default()
-        }).with(Camera2d)
+        })
+        .with(Camera2d)
         /* .spawn(LightBundle {
             transform: Transform::from_translation(Vec3::new(4.0, 8.0, 4.0)),
             ..Default::default()
         }) */
         .spawn(CameraUiBundle::default());
 
-/*    let circle = CircleShape {
+    /*    let circle = CircleShape {
         radius: 100.0,
         ..Default::default()
     };
@@ -189,10 +198,9 @@ fn keyboard_shortcuts(
     mut cam_query: Query<(&Camera, &mut Transform, &Camera2d)>,
     time: Res<Time>,
 ) {
-
     let mut camera_transform = cam_query.iter_mut().nth(0).unwrap().1;
 
-    let speed = 50.0;
+    /* let speed = 50.0;
 
     if keyboard_input.pressed(KeyCode::W) {
         camera_transform.translation.y += (speed * time.delta_seconds_f64()) as f32;
@@ -207,19 +215,20 @@ fn keyboard_shortcuts(
     }
 
     if keyboard_input.pressed(KeyCode::D) {
-        camera_transform.translation.x += (speed * time.delta_seconds_f64()) as f32;       
-    }
+        camera_transform.translation.x += (speed * time.delta_seconds_f64()) as f32;
+    } */
 
     if keyboard_input.just_pressed(KeyCode::E) && *app_state.current() != AppState::Editor {
         app_state.set_next(AppState::Editor).unwrap();
     }
 
     if keyboard_input.just_pressed(KeyCode::E) && *app_state.current() == AppState::Editor {
+        camera_transform.scale = Vec3::splat(1.0);
         app_state.set_next(AppState::PlayerTurn).unwrap();
     }
 
     /*
-    
+
     if keyboard_input.just_pressed(KeyCode::H) && *app_state.current() != AppState::Town {
         app_state.set_next(AppState::Town).unwrap();
     }
