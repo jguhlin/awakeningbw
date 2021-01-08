@@ -504,8 +504,7 @@ dependencies = [
 [[package]]
 name = "bevy_prototype_lyon"
 version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dd76a39d0f1914c96d42d06e91ec7551ecf98117e6347c44f7aa72728ae00d9"
+source = "git+https://github.com/Nilirad/bevy_prototype_lyon/#998c59b86b953d619db1d12fc71f1aa5fa98fe95"
 dependencies = [
  "bevy",
  "lyon_tessellation",
