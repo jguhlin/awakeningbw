@@ -12,10 +12,12 @@ use bevy::{
 
 use crate::*;
 use furniture::*;
+use data::*;
+use npc::*;
 
 #[derive(Default)]
 pub struct EditorData {
-    world_pos: Vec2
+    world_pos: Vec2,
 }
 
 pub struct EditorPlugin;
@@ -30,12 +32,14 @@ impl Plugin for EditorPlugin {
             ) */
             .add_resource(EditorData::default())
             .on_state_enter(STAGE, AppState::Editor, editor_create.system())
+            .on_state_enter(STAGE, AppState::Editor, spawn_the_days_furniture.system())
             // Update
             .on_state_update(STAGE, AppState::Editor, click.system())
             .on_state_update(STAGE, AppState::Editor, keyboard_shortcuts.system())
             .on_state_update(STAGE, AppState::Editor, hover.system())
             .on_state_update(STAGE, AppState::Editor, hover_update.system())
             .on_state_update(STAGE, AppState::Editor, world_pos.system())
+            .on_state_update(STAGE, AppState::Editor, change_day.system())
             // Exit
             .on_state_exit(STAGE, AppState::Editor, cleanup_entities.system());
     }
@@ -67,21 +71,26 @@ fn editor_create(
 
     let placed_furniture = PlacedFurniture::default();
 
-    commands.spawn(SpriteBundle {
-        material: furniture_assets
-        .assets
-        .get(&placed_furniture.item)
-        .unwrap()
-        .clone(),
-        transform: {
-            let mut x = Transform::from_translation(Vec3::new(0.0, 0.0, 0.0));
-            x.rotate(placed_furniture.rot);
-            x
-        },
-        ..Default::default()
-    }).with(Hovering).with(placed_furniture);
+    commands
+        .spawn(SpriteBundle {
+            material: furniture_assets
+                .assets
+                .get(&placed_furniture.item)
+                .unwrap()
+                .clone(),
+            transform: {
+                let mut x = Transform::from_translation(Vec3::new(0.0, 0.0, 0.0));
+                x.rotate(placed_furniture.rot);
+                x
+            },
+            ..Default::default()
+        })
+        .with(Hovering)
+        .with(placed_furniture);
 
-    stage_entities.entities.push(commands.current_entity().unwrap());
+    stage_entities
+        .entities
+        .push(commands.current_entity().unwrap());
 }
 
 #[derive(Default)]
@@ -123,28 +132,35 @@ fn click(
     mut meshes: ResMut<Assets<Mesh>>,
     mut asset_server: Res<AssetServer>,
     furniture_assets: Res<FurnitureAssets>,
-    placed_furniture: Query<(&Hovering, &PlacedFurniture)>,
+    mut placed_furniture: Query<(&Hovering, &mut PlacedFurniture)>,
     mut cam_query: Query<(&Camera2d, &mut Camera, &mut Transform)>,
+    mut stage_entities: ResMut<StageEntities>,
 ) {
     let mut camera_transform = cam_query.iter_mut().nth(0).unwrap().2;
-    let mut placed_furniture = placed_furniture.iter().nth(0).unwrap().1;
+    let mut placed_furniture = placed_furniture.iter_mut().nth(0).unwrap().1;
 
     if mouse_button_input.just_pressed(MouseButton::Left) {
         let window = windows.get_primary().unwrap();
-        let cursor_position = window.cursor_position().unwrap();
+        let cursor_position = match window.cursor_position() {
+            Some(x) => x,
+            None => return,
+        };
         let size = Vec2::new(window.width() as f32, window.height() as f32);
         let p = cursor_position - size / 2.0;
         let world_pos = camera_transform.compute_matrix() * p.extend(0.0).extend(1.0);
 
-        println!("Spawning... {} {} {:#?}", world_pos.x, world_pos.y, placed_furniture);
-
-        spawn_furniture(
-            &mut commands,
-            furniture_assets,
-            &placed_furniture,
-            world_pos.x,
-            world_pos.y,
+        println!(
+            "Spawning... {} {} {:#?}",
+            world_pos.x, world_pos.y, placed_furniture
         );
+
+        placed_furniture.x = world_pos.x;
+        placed_furniture.y = world_pos.y;
+
+        let e = spawn_furniture(&mut commands, &furniture_assets, &placed_furniture);
+
+        record_furniture(placed_furniture.clone());
+        stage_entities.entities.push(e);
     }
 
     for event in state.mouse_wheel_event_reader.iter(&mouse_wheel_events) {
@@ -155,23 +171,33 @@ fn click(
 
 struct Hovering;
 
-fn hover(mut state: Local<State>,
-//    cursor_moved_events: Res<Events<CursorMoved>>,
+fn hover(
+    mut state: Local<State>,
+    //    cursor_moved_events: Res<Events<CursorMoved>>,
     mut query: Query<(&Hovering, Entity, &mut Transform)>,
     mut editor_data: ResMut<EditorData>,
 ) {
-
     let mut hovering_item = query.iter_mut().nth(0).unwrap().2;
 
     //for i in state.cursor_moved_event_reader.iter(&cursor_moved_events) {
-        hovering_item.translation.x = editor_data.world_pos.x;
-        hovering_item.translation.y = editor_data.world_pos.y;
+    hovering_item.translation.x = editor_data.world_pos.x;
+    hovering_item.translation.y = editor_data.world_pos.y;
     //}
 }
 
-fn hover_update(furniture_assets: Res<FurnitureAssets>, 
-    mut query: Query<(&Hovering, Entity, &mut Handle<ColorMaterial>, &PlacedFurniture, &mut Transform), Mutated<PlacedFurniture>>) {
-
+fn hover_update(
+    furniture_assets: Res<FurnitureAssets>,
+    mut query: Query<
+        (
+            &Hovering,
+            Entity,
+            &mut Handle<ColorMaterial>,
+            &PlacedFurniture,
+            &mut Transform,
+        ),
+        Mutated<PlacedFurniture>,
+    >,
+) {
     for (_, _, mut x, placed_furniture, mut transform) in query.iter_mut() {
         *x = furniture_assets
             .assets
@@ -189,8 +215,8 @@ fn keyboard_shortcuts(
     mut placed: Query<(&Hovering, &mut PlacedFurniture)>,
     mut cam_query: Query<(&Camera, &mut Transform, &Camera2d)>,
     time: Res<Time>,
+    mut day: ResMut<Day>,
 ) {
-
     let mut placed = placed.iter_mut().nth(0).unwrap().1;
 
     if keyboard_input.just_pressed(KeyCode::R) {
@@ -219,22 +245,47 @@ fn keyboard_shortcuts(
         placed.item = FurnitureItem::Piano;
     }
 
+    if keyboard_input.just_pressed(KeyCode::N) {
+        // Plop down an NPC here...
+    }
+
+    if keyboard_input.just_pressed(KeyCode::LBracket) {
+        placed.day.prev();
+        day.prev();
+        println!("{:#?}", placed.day);
+    }
+
+    if keyboard_input.just_pressed(KeyCode::RBracket) {
+        placed.day.next();
+        day.next();
+        println!("{:#?}", placed.day);
+    }
+
+    
+
+
+
+    if keyboard_input.just_pressed(KeyCode::Z) {
+        write_yaml();
+        println!("Saved...");
+    }
+
     let speed = 500.0;
 
     if keyboard_input.pressed(KeyCode::W) {
-        camera_transform.translation.y += (speed * time.delta_seconds_f64()) as f32;
+        camera_transform.translation.y += (speed * time.delta_seconds_f64() * camera_transform.scale.x as f64) as f32;
     }
 
     if keyboard_input.pressed(KeyCode::A) {
-        camera_transform.translation.x -= (speed * time.delta_seconds_f64()) as f32;
+        camera_transform.translation.x -= (speed * time.delta_seconds_f64() * camera_transform.scale.x as f64) as f32;
     }
 
     if keyboard_input.pressed(KeyCode::S) {
-        camera_transform.translation.y -= (speed * time.delta_seconds_f64()) as f32;
+        camera_transform.translation.y -= (speed * time.delta_seconds_f64() * camera_transform.scale.x as f64) as f32;
     }
 
     if keyboard_input.pressed(KeyCode::D) {
-        camera_transform.translation.x += (speed * time.delta_seconds_f64()) as f32;
+        camera_transform.translation.x += (speed * time.delta_seconds_f64() * camera_transform.scale.x as f64) as f32;
     }
 
     /*

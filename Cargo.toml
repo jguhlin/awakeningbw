@@ -41,7 +41,8 @@ strum_macros = "0.20"
 #generic-array = "0.14.4"
 #numeric-array = "0.5.2"
 #ndarray = "0.14.0"
-bevy_rapier2d = { path = "../bevy_rapier/bevy_rapier2d", features = ["wasm-bindgen"] }
+#bevy_rapier2d = { path = "../bevy_rapier/bevy_rapier2d", features = ["wasm-bindgen"] }
+bevy_rapier2d = {version = "0.7.0", features = ["wasm-bindgen"] }
 yaml-rust = "0.4.4"
 once_cell = "1.5.2"
 hashbrown = {version = "0.9", features = ["ahash", "inline-more"]}
@@ -51,6 +52,8 @@ bevy_easings = "0.3.0"
 bevy-contrib-inspector = "0.5.1"
 bevy_ninepatch = "0.4.0"
 svg_face = "0.1.3"
+serde = "1.0"
+serde_yaml = "0.8"
 
 [profile.dev]
 opt-level = 1

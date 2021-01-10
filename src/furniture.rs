@@ -1,21 +1,47 @@
 use bevy::math::{quat, Quat};
 use bevy::prelude::*;
 use hashbrown::HashMap;
+use serde::{Serialize, Deserialize};
 
-#[derive(PartialEq, Eq, Hash, Debug)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum FurnitureItem {
     Couch,
     Plant,
     Piano,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct PlacedFurniture {
     pub item: FurnitureItem,
     pub x: f32,
     pub y: f32,
     pub rot: Quat,
     pub rotation: f32,
+    pub day: Day,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Day {
+    All,
+    Day(u8),
+}
+
+impl Day {
+    pub fn next(&mut self) {
+        *self = match self {
+            Day::All => Day::Day(0),
+            Day::Day(x) => Day::Day(*x + 1),
+        }
+    }
+
+    // Should only be used during the editor!
+    pub fn prev(&mut self) {
+        *self = match self {
+            Day::All => Day::All,
+            Day::Day(0) => Day::All,
+            Day::Day(x) => Day::Day(*x - 1),
+        }
+    }
 }
 
 impl Default for PlacedFurniture {
@@ -26,7 +52,14 @@ impl Default for PlacedFurniture {
             y: 0.0,
             rot: Quat::identity(),
             rotation: 1.0,
+            day: Day::All,
         }
+    }
+}
+
+impl Default for Day {
+    fn default() -> Self {
+        Day::Day(0)
     }
 }
 

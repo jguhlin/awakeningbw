@@ -196,6 +196,8 @@ dependencies = [
  "rand_chacha 0.3.0",
  "rand_distr 0.4.0",
  "rand_xoshiro",
+ "serde",
+ "serde_yaml",
  "strum",
  "strum_macros",
  "svg_face",
@@ -513,6 +515,8 @@ dependencies = [
 [[package]]
 name = "bevy_rapier2d"
 version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8ccd0c05a0b449c4e07a60c2fcd3bc36d8438ffaf0556970a8c5db3153020ac"
 dependencies = [
  "bevy",
  "concurrent-queue",
@@ -1233,6 +1237,12 @@ name = "downcast-rs"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
+
+[[package]]
+name = "dtoa"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88d7ed2934d741c6b37e33e3832298e8850b53fd2d2bea03873375596c7cea4e"
 
 [[package]]
 name = "either"
@@ -2912,6 +2922,18 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "serde_yaml"
+version = "0.8.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "971be8f6e4d4a47163b405a3df70d14359186f9ab0f3a3ec37df144ca1ce089f"
+dependencies = [
+ "dtoa",
+ "linked-hash-map",
+ "serde",
+ "yaml-rust",
 ]
 
 [[package]]

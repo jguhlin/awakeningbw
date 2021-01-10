@@ -8,17 +8,24 @@ use bevy_prototype_lyon::prelude::*;
 use bevy_rapier2d::physics::RapierConfiguration;
 use bevy_rapier2d::physics::RapierPhysicsPlugin;
 use bevy_rapier2d::render::RapierRenderPlugin;
+use bevy_rapier2d::na as na;
 use rand::distributions::{Distribution, Uniform};
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use std::str::FromStr;
 
+mod data;
 mod editor;
 mod furniture;
+mod gameplay;
+mod npc;
 mod player;
 
+use data::*;
 use editor::*;
 use furniture::*;
+use gameplay::*;
+use npc::*;
 use player::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -38,12 +45,19 @@ pub struct StageEntities {
     entities: Vec<Entity>,
 }
 
+#[derive(Default)]
+pub struct FurnitureEntities {
+    entities: Vec<(Day, Entity)>,
+}
+
 pub struct Player {}
 
 #[bevy_main]
 fn main() {
     let mut app = App::build();
     app.add_resource(StageEntities::default())
+        .add_resource(FurnitureEntities::default())
+        .add_resource(Day::default())
         .add_resource(State::new(AppState::PlayerTurn))
         .add_resource(Player {})
         .add_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
@@ -58,7 +72,12 @@ fn main() {
         })
         .add_stage_after(stage::UPDATE, STAGE, StateStage::<AppState>::default())
         // Basic Bevy Systems
-        .add_plugins(DefaultPlugins);
+        .add_plugins(DefaultPlugins)
+        .add_plugin(RapierPhysicsPlugin)
+        .add_resource(RapierConfiguration {
+            gravity: na::Vector2::zeros(),
+            ..Default::default()
+        });
 
     #[cfg(target_arch = "wasm32")]
     app.add_plugin(bevy_webgl2::WebGL2Plugin);
@@ -85,6 +104,9 @@ fn main() {
         .add_system(debug.system())
         .add_plugin(EditorPlugin)
         .add_plugin(PlayerPlugin)
+        .add_plugin(GameplayPlugin)
+        .add_plugin(NpcPlugin)
+        .add_plugin(RapierRenderPlugin)
         // .add_plugin(RapierRenderPlugin)
         // .add_plugin(DebugPickingPlugin)
         .run();
@@ -92,11 +114,9 @@ fn main() {
 
 pub fn spawn_furniture(
     commands: &mut Commands,
-    furniture_assets: Res<FurnitureAssets>,
+    furniture_assets: &Res<FurnitureAssets>,
     placed_furniture: &PlacedFurniture,
-    x: f32,
-    y: f32,
-) {
+) -> Entity {
     let asset = furniture_assets
         .assets
         .get(&placed_furniture.item)
@@ -106,12 +126,15 @@ pub fn spawn_furniture(
     commands.spawn(SpriteBundle {
         material: asset,
         transform: {
-            let mut x = Transform::from_translation(Vec3::new(x, y, 0.0));
+            let mut x =
+                Transform::from_translation(Vec3::new(placed_furniture.x, placed_furniture.y, 0.0));
             x.rotate(placed_furniture.rot);
             x
         },
         ..Default::default()
     });
+
+    commands.current_entity().unwrap()
 }
 
 fn setup(
@@ -120,6 +143,8 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     asset_server: Res<AssetServer>,
 ) {
+    init_data();
+
     commands
         .spawn(Camera2dBundle {
             /*transform: Transform::from_matrix(Mat4::from_rotation_translation(
@@ -162,7 +187,7 @@ fn setup(
         ..Default::default()
     });
 
-    let texture_handle = asset_server.load("couch.png");
+    /*let texture_handle = asset_server.load("couch.png");
     // let texture_handle = asset_server.load("bevy_logo_light.png");
 
     commands.spawn(SpriteBundle {
@@ -175,7 +200,7 @@ fn setup(
     commands.spawn(SpriteBundle {
         material: materials.add(texture_handle.into()),
         ..Default::default()
-    });
+    }); */
 }
 
 fn debug(
